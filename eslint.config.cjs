@@ -17,6 +17,8 @@ module.exports = [
 		},
 		rules: {
 			indent: ["error", "tab"],
+			"no-mixed-spaces-and-tabs": "error",
+			"no-trailing-spaces": "error",
 			"no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
 			"no-console": "off",
 		},
@@ -33,6 +35,8 @@ module.exports = [
 		},
 		rules: {
 			indent: ["error", "tab"],
+			"no-mixed-spaces-and-tabs": "error",
+			"no-trailing-spaces": "error",
 			"no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
 			"no-console": "off",
 		},

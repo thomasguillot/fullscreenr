@@ -82,7 +82,7 @@ async function main() {
 
 	for (const size of SIZES) {
 		console.log(`Generating icon ${size}x${size}`);
-		 
+
 		await generateIcon(size);
 	}
 

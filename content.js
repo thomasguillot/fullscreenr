@@ -3,10 +3,10 @@
 	script.src = chrome.runtime.getURL("injected.js");
 	script.type = "text/javascript";
 	(document.documentElement || document.head).appendChild(script);
-  
+
 	var ready = false;
 	var multipleDisplays = false;
-  
+
 	function tryActivate() {
 		if (ready && multipleDisplays) {
 			window.postMessage({ type: "fullscreenr-activate" }, "*");
