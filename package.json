@@ -1,0 +1,19 @@
+{
+	"name": "fullscreenr-tools",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check": "npm run lint && npm run security:check",
+		"generate:icons": "node tools/generate-icons.mjs",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"security:check": "node tools/check-security.mjs"
+	},
+	"devDependencies": {
+		"eslint": "^9.15.0",
+		"globals": "^15.12.0",
+		"sharp": "^0.33.4"
+	}
+}
+
