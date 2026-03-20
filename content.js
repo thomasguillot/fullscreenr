@@ -35,7 +35,7 @@
 		if (message.type === "displays-updated") {
 			multipleDisplays = message.multipleDisplays;
 			if (multipleDisplays) {
-				window.postMessage({ type: "fullscreenr-activate" }, safeOrigin);
+				tryActivate();
 			} else {
 				window.postMessage({ type: "fullscreenr-deactivate" }, safeOrigin);
 			}
