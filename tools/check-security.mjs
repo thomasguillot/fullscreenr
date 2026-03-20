@@ -7,7 +7,6 @@ const __dirname = path.dirname(__filename);
 
 const projectRoot = path.resolve(__dirname, "..");
 const manifestPath = path.join(projectRoot, "manifest.json");
-const contentScriptPath = path.join(projectRoot, "content.js");
 
 function fail(message) {
 	console.error(`❌ ${message}`);
@@ -32,14 +31,14 @@ async function checkManifest() {
 		ok("manifest_version is 3");
 	}
 
-	const allowedPermissions = ["system.display"];
+	const allowedPermissions = ["system.display", "tabs"];
 	const perms = manifest.permissions || [];
 
 	const unexpectedPerms = perms.filter((p) => !allowedPermissions.includes(p));
 	if (unexpectedPerms.length > 0) {
 		fail(`Unexpected permissions in manifest: ${unexpectedPerms.join(", ")}`);
 	} else {
-		ok("Only expected permissions are requested (system.display)");
+		ok("Only expected permissions are requested");
 	}
 
 	if (manifest.host_permissions && manifest.host_permissions.length > 0) {
@@ -62,23 +61,26 @@ async function checkManifest() {
 	}
 }
 
-async function checkContentScript() {
-	const code = await fs.readFile(contentScriptPath, "utf8");
+async function checkJsFile(filePath) {
+	const code = await fs.readFile(filePath, "utf8");
+	const name = path.basename(filePath);
 
 	if (code.includes("eval(")) {
-		fail("content.js must not use eval()");
+		fail(`${name} must not use eval()`);
 	}
 
 	if (code.includes("new Function(")) {
-		fail("content.js must not use new Function()");
+		fail(`${name} must not use new Function()`);
 	}
 
-	ok("content.js does not use eval() or new Function()");
+	ok(`${name} does not use eval() or new Function()`);
 }
 
 async function main() {
 	await checkManifest();
-	await checkContentScript();
+	await checkJsFile(path.join(projectRoot, "content.js"));
+	await checkJsFile(path.join(projectRoot, "injected.js"));
+	await checkJsFile(path.join(projectRoot, "background.js"));
 
 	if (process.exitCode && process.exitCode !== 0) {
 		console.error("Security checks failed.");
@@ -92,4 +94,3 @@ main().catch((error) => {
 	console.error(error);
 	process.exitCode = 1;
 });
-
