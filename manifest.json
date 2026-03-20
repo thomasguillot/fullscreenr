@@ -9,7 +9,8 @@
 		"128": "icons/icon128.png"
 	},
 	"permissions": [
-		"system.display"
+		"system.display",
+		"tabs"
 	],
 	"background": {
 		"service_worker": "background.js"
