@@ -5,6 +5,8 @@
 
 	window.__fullscreenrInitialized = true;
 
+	var safeOrigin = window.location.origin === "null" ? "*" : window.location.origin;
+
 	var ACTIVE_CLASS = "fullscreenr-active";
 	var STYLE_ELEMENT_ID = "fullscreenr-styles";
 	var enabled = false;
@@ -211,10 +213,19 @@
 	});
 
 	window.addEventListener("message", function (event) {
+		if (event.origin !== window.location.origin) {
+			return;
+		}
 		if (event.data && event.data.type === "fullscreenr-activate") {
 			enabled = true;
 		}
+		if (event.data && event.data.type === "fullscreenr-deactivate") {
+			enabled = false;
+			if (activeElement) {
+				exitFakeFullscreen();
+			}
+		}
 	});
 
-	window.postMessage({ type: "fullscreenr-ready" }, "*");
+	window.postMessage({ type: "fullscreenr-ready" }, safeOrigin);
 }());
