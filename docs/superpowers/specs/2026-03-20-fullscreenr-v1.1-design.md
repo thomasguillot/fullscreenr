@@ -17,21 +17,29 @@ Fullscreenr is a Chrome MV3 extension that intercepts `requestFullscreen()` call
 
 **Problem:** `content.js` posts `fullscreenr-activate` with `"*"` as the target origin, and `injected.js` accepts the message with no origin check. Any malicious page script can fake-activate the extension.
 
-**Fix:**
-- In `content.js`: use `window.location.origin` as the target origin when posting. For `file://` pages (where origin is `"null"`), fall back to `"*"`.
-- In `injected.js`: verify `event.origin === window.location.origin` before acting on any incoming message. Apply the same `"null"` fallback.
+**Fix:** Both directions of the `postMessage` channel must be hardened.
+
+Origin precision note: `window.location.origin` is always a string. On `file://` pages it is the four-character string `"null"` (not the JS `null` primitive). The `postMessage` API does not accept `"null"` as a valid opaque-origin target, so any caller posting a message must check `if (window.location.origin === "null")` and fall back to `"*"` for the target-origin argument. On the receiving side, `event.origin` will also be the string `"null"` on `file://` pages, so a simple `event.origin === window.location.origin` comparison works uniformly with no fallback needed.
+
+**`content.js` → `injected.js` (activate/deactivate):**
+- Use `window.location.origin` (with `"null"` → `"*"` fallback) as the `postMessage` target origin for both `fullscreenr-activate` and `fullscreenr-deactivate`.
+- `injected.js` must verify `event.origin === window.location.origin` before acting on either message.
+
+**`injected.js` → `content.js` (ready handshake):**
+- `injected.js` must use `window.location.origin` (with `"null"` → `"*"` fallback) as the target origin when posting `fullscreenr-ready`.
+- `content.js` must verify `event.origin === window.location.origin` before acting on `fullscreenr-ready`. Without this, a page script can spoof `fullscreenr-ready` to trigger `tryActivate()` in `content.js`, which would then send `fullscreenr-activate` to `injected.js`.
 
 ### 1.2 Missing `webkitExitFullscreen` override
 
 **Problem:** `injected.js` overrides `requestFullscreen` and its webkit/moz variants for entering fullscreen, and overrides `document.exitFullscreen` for exiting — but never overrides `document.webkitExitFullscreen`. Sites that call this variant to exit fake fullscreen won't trigger the cleanup.
 
-**Fix:** Override `Document.prototype.webkitExitFullscreen` alongside `exitFullscreen`, mirroring the same pattern.
+**Fix:** Override `Document.prototype.webkitExitFullscreen` alongside `exitFullscreen`, mirroring the same pattern. Guard the override with an existence check (consistent with entry-side overrides like `webkitRequestFullscreen`) — only patch the prototype if the property exists on the target browser.
 
 ### 1.3 Security check only scans `content.js`
 
 **Problem:** `tools/check-security.mjs` checks for `eval()` and `new Function()` in `content.js` only. `injected.js` and `background.js` are not scanned.
 
-**Fix:** Refactor `checkContentScript()` into a generic `checkJsFile(filePath)` function and call it for all three JS files in the project root.
+**Fix:** Refactor `checkContentScript()` into a generic `checkJsFile(filePath)` function and call it for all three JS files in the project root. Also update the `allowedPermissions` array in `checkManifest()` to include `"tabs"` (added in Section 2.1) so the security check doesn't fail after the manifest change.
 
 ---
 
@@ -42,27 +50,27 @@ Fullscreenr is a Chrome MV3 extension that intercepts `requestFullscreen()` call
 **Problem:** The display count is checked once at page load. Plugging in or unplugging a display mid-session leaves the extension stuck in its initial state.
 
 **Fix:**
-- `background.js`: Listen to `chrome.system.display.onDisplayChanged`. On change, re-run the display count check and broadcast a `{ type: "displays-updated", multipleDisplays: bool }` message to all active tabs via `chrome.tabs.query` + `chrome.tabs.sendMessage`. Add `"tabs"` to the manifest permissions.
-- `content.js`: Listen for `chrome.runtime.onMessage` for `displays-updated`. Forward the updated state to `injected.js` via `postMessage` — either `fullscreenr-activate` or the new `fullscreenr-deactivate`.
-- `injected.js`: Handle `fullscreenr-deactivate` message — set `enabled = false`, and if currently in fake fullscreen, call `exitFakeFullscreen()`.
+- `background.js`: Listen to `chrome.system.display.onDisplayChanged`. On change, re-run the display count check and broadcast a `{ type: "displays-updated", multipleDisplays: bool }` message to all active tabs via `chrome.tabs.query` + `chrome.tabs.sendMessage`. Add `"tabs"` to the manifest permissions. Each `sendMessage` call must consume `chrome.runtime.lastError` (or use a `.catch()`) to silently ignore tabs where no content script is running (e.g. `chrome://` pages, extension pages, PDFs).
+- `content.js`: Listen for `chrome.runtime.onMessage` for `displays-updated`. Forward the updated state to `injected.js` via `postMessage` using the tightened origin (Section 1.1) — post `{ type: "fullscreenr-activate" }` if `multipleDisplays` is `true`, or `{ type: "fullscreenr-deactivate" }` if `false`.
+- `injected.js`: Handle the `fullscreenr-deactivate` message (`{ type: "fullscreenr-deactivate" }`) — set `enabled = false`, and if currently in fake fullscreen, call `exitFakeFullscreen()`.
 
 ### 2.2 `document.fullscreenEnabled` getter override
 
 **Problem:** Some sites check `document.fullscreenEnabled` before attempting fullscreen. This currently returns the real browser value, potentially `false` in sandboxed contexts, causing sites to skip fullscreen entirely.
 
-**Fix:** In `overrideFullscreenGetters()`, add an override for `document.fullscreenEnabled` that returns `true` when the extension is enabled.
+**Fix:** In `overrideFullscreenGetters()`, capture the original `document.fullscreenEnabled` descriptor before overriding (consistent with the pattern used for all other getters). The override returns `true` when `enabled === true`; when `enabled === false`, it delegates to the original descriptor's getter if one exists, or returns `false` if no descriptor exists (indicating the browser does not support the fullscreen API at all).
 
 ### 2.3 `requestFullscreen` options parameter
 
 **Problem:** The `requestFullscreen(options)` override silently drops the `options` argument. While this doesn't break fake fullscreen visually, strict call sites may have issues.
 
-**Fix:** Update all three `requestFullscreen` overrides (`standard`, `webkit`, `moz`) to accept and explicitly ignore the `options` parameter — signature becomes `function (options)` with the argument received but unused in fake fullscreen mode.
+**Fix:** Update all three `requestFullscreen` overrides (`standard`, `webkit`, `moz`) to accept the `options` parameter. In fake fullscreen mode, the argument is intentionally ignored (fake fullscreen has no concept of `navigationUI`). In the non-fake passthrough path, `options` must be forwarded to the original: `originalRequestFullscreen.call(this, options)` — so users on single-display setups retain full API compatibility.
 
 ### 2.4 `mozCancelFullScreen` exit override
 
 **Problem:** The moz exit variant `document.mozCancelFullScreen` is not overridden, leaving an unhandled exit path.
 
-**Fix:** Override `Document.prototype.mozCancelFullScreen` mirroring the `exitFullscreen` pattern.
+**Fix:** Override `Document.prototype.mozCancelFullScreen` mirroring the `exitFullscreen` pattern. Guard the override with an existence check, consistent with the entry-side `mozRequestFullScreen` guard.
 
 ---
 
