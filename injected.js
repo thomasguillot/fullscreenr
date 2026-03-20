@@ -20,6 +20,8 @@
 	var originalWebkitFullscreenElementGetter = Object.getOwnPropertyDescriptor(Document.prototype, "webkitFullscreenElement");
 	var originalFullscreenGetter = Object.getOwnPropertyDescriptor(Document.prototype, "fullscreen");
 	var originalWebkitIsFullScreenGetter = Object.getOwnPropertyDescriptor(Document.prototype, "webkitIsFullScreen");
+	var originalWebkitExitFullscreen = Document.prototype.webkitExitFullscreen || null;
+	var originalMozCancelFullScreen = Document.prototype.mozCancelFullScreen || null;
 
 	function injectStyles() {
 		if (document.getElementById(STYLE_ELEMENT_ID)) {
@@ -167,6 +169,26 @@
 		}
 		return originalExitFullscreen.call(this);
 	};
+
+	if (originalWebkitExitFullscreen) {
+		Document.prototype.webkitExitFullscreen = function () {
+			if (enabled) {
+				exitFakeFullscreen();
+				return Promise.resolve();
+			}
+			return originalWebkitExitFullscreen.call(this);
+		};
+	}
+
+	if (originalMozCancelFullScreen) {
+		Document.prototype.mozCancelFullScreen = function () {
+			if (enabled) {
+				exitFakeFullscreen();
+				return Promise.resolve();
+			}
+			return originalMozCancelFullScreen.call(this);
+		};
+	}
 
 	function handleKeydown(event) {
 		if (event.key === "Escape" || event.key === "Esc") {
