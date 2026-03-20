@@ -24,6 +24,7 @@
 	var originalWebkitIsFullScreenGetter = Object.getOwnPropertyDescriptor(Document.prototype, "webkitIsFullScreen");
 	var originalWebkitExitFullscreen = Document.prototype.webkitExitFullscreen || null;
 	var originalMozCancelFullScreen = Document.prototype.mozCancelFullScreen || null;
+	var originalFullscreenEnabledGetter = Object.getOwnPropertyDescriptor(Document.prototype, "fullscreenEnabled");
 
 	function injectStyles() {
 		if (document.getElementById(STYLE_ELEMENT_ID)) {
@@ -134,33 +135,42 @@
 				configurable: true,
 			});
 		}
+
+		Object.defineProperty(Document.prototype, "fullscreenEnabled", {
+			get: function () {
+				if (enabled) return true;
+				if (originalFullscreenEnabledGetter) return originalFullscreenEnabledGetter.get.call(this);
+				return false;
+			},
+			configurable: true,
+		});
 	}
 
-	Element.prototype.requestFullscreen = function () {
+	Element.prototype.requestFullscreen = function (options) {
 		if (enabled) {
 			enterFakeFullscreen(this);
 			return Promise.resolve();
 		}
-		return originalRequestFullscreen.call(this);
+		return originalRequestFullscreen.call(this, options);
 	};
 
 	if (originalWebkitRequestFullscreen) {
-		Element.prototype.webkitRequestFullscreen = function () {
+		Element.prototype.webkitRequestFullscreen = function (options) {
 			if (enabled) {
 				enterFakeFullscreen(this);
 				return Promise.resolve();
 			}
-			return originalWebkitRequestFullscreen.call(this);
+			return originalWebkitRequestFullscreen.call(this, options);
 		};
 	}
 
 	if (originalMozRequestFullScreen) {
-		Element.prototype.mozRequestFullScreen = function () {
+		Element.prototype.mozRequestFullScreen = function (options) {
 			if (enabled) {
 				enterFakeFullscreen(this);
 				return Promise.resolve();
 			}
-			return originalMozRequestFullScreen.call(this);
+			return originalMozRequestFullScreen.call(this, options);
 		};
 	}
 
