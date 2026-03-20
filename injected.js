@@ -201,7 +201,7 @@
 		}
 	}
 
-	injectStyles();
+	// Getters must be overridden before any site code runs, so this stays at load time.
 	overrideFullscreenGetters();
 
 	document.addEventListener("keydown", handleKeydown, true);
